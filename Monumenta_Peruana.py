@@ -9,11 +9,22 @@ import networkx as nx
 from ipysigma import Sigma
 
 #%%
-mp1 = gsheet_to_df('1Q52c6WSHhe6P00C67gNHc1VrIDK6wNcQUwwLJ_p_QAw', 'Arkusz1')
+mp1 = gsheet_to_df('1AHNc7DwJH0_1jhriiIVCCeWdklKMsqK2nDFrSakVPjo', 'Arkusz1')
 mp2 = gsheet_to_df('16hX8RYUMFCiBDqlkUWHfZ3FlqG4J2m44KVqb3m13wkA', 'Sheet1')
 mp3 = gsheet_to_df('14mMODKwkKppKFImTatg9ipQBgg1UgyYFiW2wAQXevTk', 'Sheet1')
 mp4 = gsheet_to_df('1LJbAuu1Yo50-0RroF6Gz7hrEn865yH_3ojlhiVzo67s', 'Sheet1')
-dfs = [mp1, mp2, mp3, mp4]
+mp5 = gsheet_to_df('1mucj6Xe9Mmwhq-9kkunyfpgSxp8Z_YIxcN6EdaVqDpQ', 'Sheet1')
+mp6 = gsheet_to_df('1iz37Cuqc2beXSV7byGSXrckflawQ7ocdRgEzMEqj6S4', 'Sheet1')
+mp7 = gsheet_to_df('1nrLfYEX2cUml7mD_E17Ui0iuU8h59GYP_0EUfiN6roY', 'Sheet1')
+mp8 = gsheet_to_df('1phsf4t8n8EWKofSPtRFrn6nxpRkex-xM1mp7xIDwldw', 'Sheet1')
+dfs = {'1': mp1, 
+       '2': mp2, 
+       '3': mp3, 
+       '4': mp4, 
+       '5': mp5, 
+       '6': mp6, 
+       '7': mp7, 
+       '8': mp8}
 
 #%%
 def expand_ranges(text):
@@ -56,15 +67,54 @@ def clean_page_number(raw):
 for df in tqdm(dfs):
     df['pages'] = ''
     for i, row in df.iterrows():
-        if pd.notnull(row['Additional Information (Translated)']):
-            ranges_expanded, cleaned_text = expand_ranges(row['Additional Information (Translated)'])
+        if pd.notnull(row['Additional Information']):
+            ranges_expanded, cleaned_text = expand_ranges(row['Additional Information'])
             regular_numbers = [clean_page_number(e) for e in extract_numbers(cleaned_text)]
             df['pages'][i] = regular_numbers
+
+#%% unique namies
+from monumenta_data_processor import MonumentaNameClustering, MonumentaDataProcessor
+
+names = []
+for index, df in tqdm(dfs.items()):
+    len_df = len(df)
+    test_list = [df['Name'].to_list(), [index] * len_df]
+    names.append(test_list)
+    
+unique_names = [el for sub in [e[0] for e in names] for el in sub]
+unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])[:500]
+    
+# Załaduj Twoje dane do słownika {indeks: nazwa}
+data = dict(zip(range(1,len(unique_names)+1),unique_names))
+
+clusterer = MonumentaNameClustering()
+processor = MonumentaDataProcessor(clusterer)
+
+# Przetwórz
+names_data = processor.load_data_from_dict(data)
+clusters = processor.process_monumenta_data(names_data, threshold=0.9)
+
+# Analizuj wyniki
+processor.analyze_clusters(clusters)
+processor.show_sample_clusters(clusters, min_size=2)
+
+#%% ujednolicić nazwy w indeksach źródłowych!!!!
+
+
+
+
+
+
+
+
+
+
+
 
 #%%
 
 final_data = []
-for df in tqdm(dfs):
+for index, df in tqdm(dfs.items()):
     # Tworzymy listę unikalnych par indeksów (i, j)
     pairs = list(combinations(df.index, 2))
     
