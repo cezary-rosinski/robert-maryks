@@ -7,6 +7,7 @@ import pandas as pd
 from itertools import combinations
 import networkx as nx
 from ipysigma import Sigma
+import pickle
 
 #%%
 mp1 = gsheet_to_df('1AHNc7DwJH0_1jhriiIVCCeWdklKMsqK2nDFrSakVPjo', 'Arkusz1')
@@ -81,8 +82,8 @@ for index, df in tqdm(dfs.items()):
     test_list = [df['Name'].to_list(), [index] * len_df]
     names.append(test_list)
     
-unique_names = [el for sub in [e[0] for e in names] for el in sub]
-unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])[:500]
+unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])
+# unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])[:500]
     
 # Załaduj Twoje dane do słownika {indeks: nazwa}
 data = dict(zip(range(1,len(unique_names)+1),unique_names))
@@ -94,9 +95,23 @@ processor = MonumentaDataProcessor(clusterer)
 names_data = processor.load_data_from_dict(data)
 clusters = processor.process_monumenta_data(names_data, threshold=0.9)
 
+# #testy
+# test_data = [e.get('name') for e in clusters.get(6047)]
+# test_data = dict(zip(range(1,len(test_data)+1),test_data))
+# names_data = processor.load_data_from_dict(test_data)
+# clusters_test = processor.process_monumenta_data(names_data, threshold=0.918)
+# processor.analyze_clusters(clusters_test)
+# processor.show_sample_clusters(clusters_test, min_size=2)
+
 # Analizuj wyniki
 processor.analyze_clusters(clusters)
 processor.show_sample_clusters(clusters, min_size=2)
+
+with open('data/monumenta_peruana_index_similarity.pickle', 'wb') as handle:
+    pickle.dump(clusters, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+with open('data/monumenta_peruana_index_similarity.pickle', 'rb') as handle:
+    b = pickle.load(handle)
 
 #%% ujednolicić nazwy w indeksach źródłowych!!!!
 
