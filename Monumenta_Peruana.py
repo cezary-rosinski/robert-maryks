@@ -9,25 +9,7 @@ import networkx as nx
 from ipysigma import Sigma
 import pickle
 
-#%%
-mp1 = gsheet_to_df('1AHNc7DwJH0_1jhriiIVCCeWdklKMsqK2nDFrSakVPjo', 'Arkusz1')
-mp2 = gsheet_to_df('16hX8RYUMFCiBDqlkUWHfZ3FlqG4J2m44KVqb3m13wkA', 'Sheet1')
-mp3 = gsheet_to_df('14mMODKwkKppKFImTatg9ipQBgg1UgyYFiW2wAQXevTk', 'Sheet1')
-mp4 = gsheet_to_df('1LJbAuu1Yo50-0RroF6Gz7hrEn865yH_3ojlhiVzo67s', 'Sheet1')
-mp5 = gsheet_to_df('1mucj6Xe9Mmwhq-9kkunyfpgSxp8Z_YIxcN6EdaVqDpQ', 'Sheet1')
-mp6 = gsheet_to_df('1iz37Cuqc2beXSV7byGSXrckflawQ7ocdRgEzMEqj6S4', 'Sheet1')
-mp7 = gsheet_to_df('1nrLfYEX2cUml7mD_E17Ui0iuU8h59GYP_0EUfiN6roY', 'Sheet1')
-mp8 = gsheet_to_df('1phsf4t8n8EWKofSPtRFrn6nxpRkex-xM1mp7xIDwldw', 'Sheet1')
-dfs = {'1': mp1, 
-       '2': mp2, 
-       '3': mp3, 
-       '4': mp4, 
-       '5': mp5, 
-       '6': mp6, 
-       '7': mp7, 
-       '8': mp8}
-
-#%%
+#%% defs
 def expand_ranges(text):
     expanded = []
     # znajdź i rozwiń zakresy, np. 439-442
@@ -65,7 +47,32 @@ def clean_page_number(raw):
         return int(cleaned[:-2])
     return int(cleaned)
 
-for df in tqdm(dfs):
+def find_key_with_value(slownik, szukana_nazwa):
+
+    for klucz, lista_nazw in slownik.items():
+        if szukana_nazwa in lista_nazw:
+            return klucz
+    return None
+
+#%% read data from spreadsheets
+mp1 = gsheet_to_df('1AHNc7DwJH0_1jhriiIVCCeWdklKMsqK2nDFrSakVPjo', 'Arkusz1')
+mp2 = gsheet_to_df('16hX8RYUMFCiBDqlkUWHfZ3FlqG4J2m44KVqb3m13wkA', 'Sheet1')
+mp3 = gsheet_to_df('14mMODKwkKppKFImTatg9ipQBgg1UgyYFiW2wAQXevTk', 'Sheet1')
+mp4 = gsheet_to_df('1LJbAuu1Yo50-0RroF6Gz7hrEn865yH_3ojlhiVzo67s', 'Sheet1')
+mp5 = gsheet_to_df('1mucj6Xe9Mmwhq-9kkunyfpgSxp8Z_YIxcN6EdaVqDpQ', 'Sheet1')
+mp6 = gsheet_to_df('1iz37Cuqc2beXSV7byGSXrckflawQ7ocdRgEzMEqj6S4', 'Sheet1')
+mp7 = gsheet_to_df('1nrLfYEX2cUml7mD_E17Ui0iuU8h59GYP_0EUfiN6roY', 'Sheet1')
+mp8 = gsheet_to_df('1phsf4t8n8EWKofSPtRFrn6nxpRkex-xM1mp7xIDwldw', 'Sheet1')
+dfs = {'1': mp1, 
+       '2': mp2, 
+       '3': mp3, 
+       '4': mp4, 
+       '5': mp5, 
+       '6': mp6, 
+       '7': mp7, 
+       '8': mp8}
+
+for i, df in tqdm(dfs.items()):
     df['pages'] = ''
     for i, row in df.iterrows():
         if pd.notnull(row['Additional Information']):
@@ -73,7 +80,7 @@ for df in tqdm(dfs):
             regular_numbers = [clean_page_number(e) for e in extract_numbers(cleaned_text)]
             df['pages'][i] = regular_numbers
 
-#%% unique namies
+#%% unique names
 from monumenta_data_processor import MonumentaNameClustering, MonumentaDataProcessor
 
 names = []
@@ -84,6 +91,8 @@ for index, df in tqdm(dfs.items()):
     
 unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])
 # unique_names = sorted([el for sub in [e[0] for e in names] for el in sub])[:500]
+
+unique_names_df = pd.DataFrame(unique_names, columns=['Name'])
     
 # Załaduj Twoje dane do słownika {indeks: nazwa}
 data = dict(zip(range(1,len(unique_names)+1),unique_names))
@@ -110,27 +119,69 @@ processor.show_sample_clusters(clusters, min_size=2)
 with open('data/monumenta_peruana_index_similarity.pickle', 'wb') as handle:
     pickle.dump(clusters, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+#%% manual name validation
 with open('data/monumenta_peruana_index_similarity.pickle', 'rb') as handle:
     b = pickle.load(handle)
 
+#Acosta, Polanco, Toledo, Francisco de Toledo, Almansa, Láinez, Garcia de Castro, Parra, Piñas, Ruiz, Montoya, Rodríguez, Mendoza Gonzalez, García de Toledo, Pedro de Toledo, Lima, Cuzco, Roma, Sevilla, Juli, Burgos, Medina del Campo, Valladolid, Madrid, Quito, Arequipa
+# test = {k:v for k,v in b.items() if any([e for e in v if 'arequipa' in e.get('name').lower()])}
+merge_instruction = [{'keys_to_merge': [2, 100, 101],
+                      'target_key': 100},
+                     {'keys_to_merge': [4579, 4580, 4581],
+                      'target_key': 4580},
+                     {'keys_to_merge': [5824, 5825, 5826, 5827, 5837],
+                      'target_key': 5824},
+                     {'keys_to_merge': [5658, 5831],
+                      'target_key': 5658},
+                     {'keys_to_merge': [1836, 1897],
+                      'target_key': 1836},
+                     {'keys_to_merge': [2207, 2186, 1227],
+                      'target_key': 2207},
+                     {'keys_to_merge': [5193, 4372, 2898],
+                      'target_key': 5193},
+                     {'keys_to_merge': [3139, 3140, 3141, 3146],
+                      'target_key': 3139},
+                     {'keys_to_merge': [1654, 1655, 1656, 1657, 1658, 1659, 1660],
+                      'target_key': 1654},
+                     {'keys_to_merge': [5104, 5105, 5106],
+                      'target_key': 5104},
+                     {'keys_to_merge': [5526, 5527, 5528, 5529, 5530],
+                      'target_key': 5526},
+                     {'keys_to_merge': [2914, 2915, 2916, 2917, 2918, 2919, 2921],
+                      'target_key': 2914},
+                     {'keys_to_merge': [919, 920, 921, 922],
+                      'target_key': 919},
+                     {'keys_to_merge': [3536, 3537],
+                      'target_key': 3536},
+                     {'keys_to_merge': [6123, 6124, 6125, 6126, 6129, 6130],
+                      'target_key': 6123},
+                     {'keys_to_merge': [3363, 3364, 3365, 3370],
+                      'target_key': 3363},
+                     {'keys_to_merge': [4878, 4879, 4880, 4881, 4882, 4883, 4884],
+                      'target_key': 4878},
+                     {'keys_to_merge': [432, 433, 434, 435, 436, 437],
+                      'target_key': 432},]
+
+for instruction in merge_instruction:
+    merged_values = []
+    for key in instruction.get('keys_to_merge'):
+        if key in b:
+            merged_values.extend(b[key])
+            if key != instruction.get('target_key'):
+                del b[key]
+    b[instruction.get('target_key')] = merged_values
 #%% ujednolicić nazwy w indeksach źródłowych!!!!
+from collections import Counter
 
-
-
-
-
-
-
-
-
-
-
-
-#%%
-
+name_matrix = {}
+for k, v in b.items():
+    names = [e.get('name') for e in v]
+    counter = Counter([e.title() for e in names])
+    max_count = counter.most_common(1)[0][0] 
+    name_matrix.update({max_count: set(names)})
+   
 final_data = []
 for index, df in tqdm(dfs.items()):
-    # Tworzymy listę unikalnych par indeksów (i, j)
     pairs = list(combinations(df.index, 2))
     
     # Przechowuj wyniki (pary nazw)
@@ -141,13 +192,14 @@ for index, df in tqdm(dfs.items()):
         pages_j = set(df.loc[j, 'pages'])
         
         if pages_i & pages_j:  # sprawdzamy przecięcie
-            matching_names.append((df.loc[i, 'Name'], df.loc[j, 'Name']))
+            matching_names.append((find_key_with_value(name_matrix, df.loc[i, 'Name']), find_key_with_value(name_matrix, df.loc[j, 'Name'])))
     print(f"Liczba par: {len(matching_names)}")
     final_data.extend(matching_names)
 
 graph_df = pd.DataFrame(final_data, columns=["Person 1", "Person 2"])
+graph_df = graph_df.loc[(graph_df['Person 1'].notnull()) & (graph_df['Person 2'].notnull())]
 
-#%%
+#%% graph generation
 
 graph_df["Name_1"], graph_df["Name_2"] = zip(*graph_df.apply(lambda row: sorted([row["Person 1"], row["Person 2"]]), axis=1))
 
@@ -199,7 +251,6 @@ Sigma.write_html(
     default_node_label_size=14,
     node_border_color_from='node'
 )
-
 
 pagerank = nx.pagerank(G)
 nx.set_node_attributes(G, pagerank, name='pagerank')
