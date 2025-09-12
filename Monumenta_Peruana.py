@@ -206,7 +206,7 @@ graph_df["Name_1"], graph_df["Name_2"] = zip(*graph_df.apply(lambda row: sorted(
 graph_df = graph_df[['Name_1', 'Name_2']]
 
 co_occurrence = graph_df.groupby(['Name_1', 'Name_2']).size().reset_index(name='weight')
-co_occurrence.to_excel('data/Monumenta Peruana relations.xlsx', index=False)
+co_occurrence.to_excel('data/Monumenta Peruana relations final.xlsx', index=False)
 
 # Tworzymy graf
 G = nx.Graph()

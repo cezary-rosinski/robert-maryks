@@ -19,6 +19,7 @@ network.visualize_node_neighborhood('Cuzco', max_neighbors=20)
 import pandas as pd
 import networkx as nx
 from ipysigma import Sigma
+import numpy as np
 
 df = pd.read_excel('data/Monumenta Peruana relations.xlsx')
 G = nx.Graph()
@@ -92,18 +93,111 @@ Sigma.write_html(
     node_border_color_from='node'
 )
     
+#%%
+
+#def
+def compare_basic_metrics(graph, node1, node2):
+    """Compare basic metrics of two nodes"""
     
+    metrics = {}
     
+    # Node degrees
+    degree1 = graph.degree(node1)
+    degree2 = graph.degree(node2)
+    metrics['degrees'] = {
+        node1: degree1,
+        node2: degree2,
+        'difference': abs(degree1 - degree2),
+        'ratio': min(degree1, degree2) / max(degree1, degree2) if max(degree1, degree2) > 0 else 0
+    }
     
+    # Betweenness centrality
+    try:
+        betweenness = nx.betweenness_centrality(graph)
+        metrics['betweenness'] = {
+            node1: betweenness.get(node1, 0),
+            node2: betweenness.get(node2, 0),
+            'difference': abs(betweenness.get(node1, 0) - betweenness.get(node2, 0))
+        }
+    except:
+        metrics['betweenness'] = None
     
+    # Closeness centrality
+    try:
+        if nx.is_connected(graph):
+            closeness = nx.closeness_centrality(graph)
+            metrics['closeness'] = {
+                node1: closeness.get(node1, 0),
+                node2: closeness.get(node2, 0),
+                'difference': abs(closeness.get(node1, 0) - closeness.get(node2, 0))
+            }
+        else:
+            metrics['closeness'] = None
+    except:
+        metrics['closeness'] = None
     
+    # Clustering coefficient
+    try:
+        clustering = nx.clustering(graph)
+        metrics['clustering'] = {
+            node1: clustering.get(node1, 0),
+            node2: clustering.get(node2, 0),
+            'difference': abs(clustering.get(node1, 0) - clustering.get(node2, 0))
+        }
+    except:
+        metrics['clustering'] = None
+        
+    return metrics
+
+def compare_neighbors(graph, node1, node2):
+    """Compare neighbors of two nodes"""
     
+    neighbors1 = set(graph.neighbors(node1))
+    neighbors2 = set(graph.neighbors(node2))
     
+    # Find common neighbors and unique neighbors for each node
+    common_neighbors = neighbors1.intersection(neighbors2)
+    unique_to_node1 = neighbors1 - neighbors2
+    unique_to_node2 = neighbors2 - neighbors1
     
+    # If graph has weights, calculate average connection weights
+    weighted_analysis = None
+    if nx.is_weighted(graph):
+        weights1 = [graph[node1][neighbor].get('weight', 1) for neighbor in neighbors1]
+        weights2 = [graph[node2][neighbor].get('weight', 1) for neighbor in neighbors2]
+        
+        weighted_analysis = {
+            'avg_weight_node1': np.mean(weights1) if weights1 else 0,
+            'avg_weight_node2': np.mean(weights2) if weights2 else 0,
+            'max_weight_node1': max(weights1) if weights1 else 0,
+            'max_weight_node2': max(weights2) if weights2 else 0
+        }
     
-    
-    
-    
-    
-    
-    
+    return {
+        'neighbors_node1': neighbors1,
+        'neighbors_node2': neighbors2,
+        'common_neighbors': common_neighbors,
+        'unique_to_node1': unique_to_node1,
+        'unique_to_node2': unique_to_node2,
+        'jaccard_similarity': len(common_neighbors) / len(neighbors1.union(neighbors2)) if neighbors1.union(neighbors2) else 0,
+        'common_neighbors_count': len(common_neighbors),
+        'weighted_analysis': weighted_analysis
+    }
+
+#
+node1, node2 = 'Toledo, Francisco', 'Acosta, José De'
+compare_basic_metrics(G, node1, node2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
