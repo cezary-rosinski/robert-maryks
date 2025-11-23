@@ -16,77 +16,47 @@ df_test = gsheet_to_df('1kxnFmIx1-DW2oIpb67l-uTSWcEzn-k9yykLJ1TE1TKQ', 'Sheet1')
 
 df_texts = gsheet_to_df('1kxnFmIx1-DW2oIpb67l-uTSWcEzn-k9yykLJ1TE1TKQ', 'texts')
 texts_ids = df_texts['Work ID'].to_list()
-df_people = gsheet_to_df('1M2gc-8cGZ8gh8TTnm4jl430bL4tccdri9nw-frUWYLQ', 'people')
+df_people = gsheet_to_df('1kxnFmIx1-DW2oIpb67l-uTSWcEzn-k9yykLJ1TE1TKQ', 'People')
 df_places = gsheet_to_df('1M2gc-8cGZ8gh8TTnm4jl430bL4tccdri9nw-frUWYLQ', 'places')
 df_events = gsheet_to_df('1M2gc-8cGZ8gh8TTnm4jl430bL4tccdri9nw-frUWYLQ', 'events')
 df_genres = gsheet_to_df('1M2gc-8cGZ8gh8TTnm4jl430bL4tccdri9nw-frUWYLQ', 'genres')
 
 #%%
+people_names_ids = dict(zip(df_people['person_name'].to_list(), df_people['person_ID'].to_list()))
 
-test = df_test['Historical Figures Mentioned'].to_list()
-test = [e for e in test if isinstance(e, str)]
+test = list(zip(df_test['letter_ID'], df_test['Historical Figures Mentioned'].to_list()))
+result = []
+for a,b in test:
+    if pd.notna(b):
+        b = [e.strip() for e in b.split('|')]
+        for c in b:
+            main_name = c.split('@')[0].strip()
+            if '$' in c:
+                used_name = [el.strip() for el in c.split('$')[-1].strip().split(';')]
+            else: used_name = []
+            if '$' in main_name:
+                main_name = main_name.split('$')[0].strip()
+            if main_name:
+                person_id = people_names_ids.get(main_name)
+                result.append((a,main_name,person_id,used_name))
+            
+used_forms = pd.DataFrame(result, columns=['letter_ID', 'person_name', 'person_ID', 'person_name_form'])
+
+mentioned_in_letters = {}
+for l,n,p,f in result:
+    mentioned_in_letters.setdefault(l,[]).append(p)
+mentioned_in_letters = {k:';'.join(v) for k,v in mentioned_in_letters.items()}
+        
+mentioned_in_letters_df = pd.DataFrame(mentioned_in_letters.items())
+
 test = [ele for sup in [[re.split(f"[$]", el) for el in e.split('|')] for e in test] for ele in sup]
 test = [[el.strip() for el in e] for e in test]
 test = [[el.split('@') for el in e] for e in test]
 
 test_df = pd.DataFrame(test)
 
-[re.split(f"[@$]", e) for e in test[0].split('|')]
 
-names = []
-for e in test:
-    if len(e) == 3:
-        names.append((e[0], e[1]))
-    elif len(e) == 2:
-        names.append((e[0], None))
-        
-df_names = pd.DataFrame(names).drop_duplicates()
-
-
-text = """Paolo Sarpi@https://www.wikidata.org/wiki/Q1349158$Maestro Paolo| Fulgenzio Micanzio@https://www.wikidata.org/wiki/Q737310$Padre Fulgentio| Pope Paul V@https://www.wikidata.org/wiki/Q132711$Pope| Henry IV of France@https://www.wikidata.org/wiki/Q936976$the French king| Giovanni Diodati@https://www.wikidata.org/wiki/Q692115$Giovanni Diodati| Pierre Cotton@https://www.wikidata.org/wiki/Q2372712$Father Cotton| Jean Bochart de Champigny@https://www.wikidata.org/wiki/Q3170806$the French ambassador; $Monsieur de Champigni| Antonio Foscarini@https://www.wikidata.org/wiki/Q602038$the Venetian Ambassador| Carlo Emanuele I@https://www.wikidata.org/wiki/Q318091$the Duke of Savoye| Robert Bellarmine@https://www.wikidata.org/wiki/Q298664$Bellarmin| Giovanni Dolfin@https://www.wikidata.org/wiki/Q3107155$Cardinal Delfini| Papalini$Papalini| """
-
-def parse_people(s: str) -> dict:
-    people = {}
-
-    # 1. rozdziel osoby po '|'
-    chunks = [c.strip() for c in s.split('|') if c.strip()]
-
-    for chunk in chunks:
-        # przypadek z wikidatą
-        if '@' in chunk:
-            base, rest = chunk.split('@', 1)
-            if '$' in rest:
-                wikidata, forms_str = rest.split('$', 1)
-            else:
-                wikidata, forms_str = rest, ""
-        else:
-            # bez identyfikatora wikidaty (np. "Papalini$Papalini")
-            if '$' in chunk:
-                base, forms_str = chunk.split('$', 1)
-            else:
-                base, forms_str = chunk, ""
-            wikidata = None
-
-        # 2. rozdziel użycia w tekście po ';'
-        forms = []
-        for f in forms_str.split(';'):
-            f = f.strip()
-            if not f:
-                continue
-            if f.startswith('$'):
-                f = f[1:].strip()
-            forms.append(f)
-
-        people[base.strip()] = {
-            "wikidata": wikidata.strip() if wikidata else None,
-            "forms": forms
-        }
-
-    return people
-
-people_dict = parse_people(text)
-from pprint import pprint
-pprint(people_dict)
+#%%
 
 
 def parse_people_cell(cell):
