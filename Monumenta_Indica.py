@@ -7,7 +7,7 @@ import networkx as nx
 from tqdm import tqdm
 from ipysigma import Sigma
 
-
+#%%
 # ============================================================
 # 1. KONFIGURACJA
 # ============================================================
@@ -23,9 +23,9 @@ GRAPHML_PATH = OUTPUT_FOLDER / "Monumenta_Indica.graphml"
 HTML_PATH = OUTPUT_FOLDER / "Monumenta_Indica_network.html"
 HTML_PAGERANK_PATH = OUTPUT_FOLDER / "Monumenta_Indica_network_pagerank.html"
 
-PAGE_MAX = 999  # cały tom ma mniej niż 1000 stron; zmień, jeśli któryś tom ma więcej
+PAGE_MAX = 1100  # cały tom ma mniej niż 1000 stron; zmień, jeśli któryś tom ma więcej
 
-
+#%%
 # ============================================================
 # 2. FUNKCJE POMOCNICZE
 # ============================================================
@@ -144,7 +144,7 @@ def get_volume_id(file_path):
     """
     return file_path.stem
 
-
+#%%
 # ============================================================
 # 3. WCZYTANIE WSZYSTKICH PLIKÓW EXCEL
 # ============================================================
@@ -222,7 +222,60 @@ print(f"Liczba wystąpień bytów na stronach: {len(occurrences_df)}")
 print(f"Liczba unikalnych bytów: {occurrences_df['name'].nunique()}")
 print(f"Liczba tomów: {occurrences_df['volume'].nunique()}")
 
+duplicates = pd.read_excel(r'data\Monumenta Indica\name_unification_output/Monumenta_Indica_name_unification_template.xlsx', 'possible_duplicates')
 
+def clean_form(x: str) -> str:
+    """
+    Minimalne czyszczenie techniczne:
+    - usuwa nadmiarowe spacje,
+    - usuwa spacje na początku i końcu,
+    - nie zmienia interpunkcji ani znaków diakrytycznych.
+    """
+    if pd.isna(x):
+        return ""
+    x = str(x)
+    x = re.sub(r"\s+", " ", x)
+    return x.strip()
+
+
+def choose_preferred_form(forms):
+    """
+    Wybiera preferowaną formę:
+    1. najkrótszą po oczyszczeniu,
+    2. przy remisie: alfabetycznie.
+    """
+    forms = [clean_form(f) for f in forms if clean_form(f)]
+    forms = sorted(set(forms), key=lambda x: (len(x), x.lower()))
+    return forms[0] if forms else None
+
+
+def build_preferred_form_dict(df, column="forms", sep="|"):
+    mapping = {}
+
+    for value in df[column].dropna():
+        variants = [clean_form(x) for x in str(value).split(sep)]
+        variants = [x for x in variants if x]
+
+        preferred = choose_preferred_form(variants)
+
+        if preferred is None:
+            continue
+
+        for variant in variants:
+            mapping[variant] = preferred
+
+    return mapping
+
+
+preferred_forms = build_preferred_form_dict(duplicates, column="forms")
+
+test = occurrences_df.loc[occurrences_df['name'].isin(['<<Aenigmata »>', 'Aenigmata', 'Aenigmata »', '« Aenigmata »', '«Aenigmata »'])]
+
+occurrences_df['name'] = occurrences_df['name'].apply(lambda x: preferred_forms.get(x,x))
+
+occurrences_df.to_excel(OCCURRENCES_XLSX, index=False)
+
+#%%
 # ============================================================
 # 4. BUDOWA RELACJI WSPÓŁWYSTĘPOWANIA
 # ============================================================
@@ -285,8 +338,6 @@ print(f"Liczba unikalnych relacji: {len(co_occurrence)}")
 with pd.ExcelWriter(RELATIONS_XLSX, engine="openpyxl") as writer:
     co_occurrence.to_excel(writer, sheet_name="relations_aggregated", index=False)
     relations_raw_df.to_excel(writer, sheet_name="relations_raw_pages", index=False)
-
-occurrences_df.to_excel(OCCURRENCES_XLSX, index=False)
 
 print(f"Zapisano tabelę relacji: {RELATIONS_XLSX}")
 print(f"Zapisano tabelę wystąpień: {OCCURRENCES_XLSX}")
