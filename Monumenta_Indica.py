@@ -12,7 +12,7 @@ from ipysigma import Sigma
 # 1. KONFIGURACJA
 # ============================================================
 
-INPUT_FOLDER = Path(r"C:\Users\pracownik\Documents\robert-maryks\data\Monumenta Indica")
+INPUT_FOLDER = Path(r"C:\Users\Cezary\Documents\robert-maryks\data\Monumenta Indica")
 
 OUTPUT_FOLDER = INPUT_FOLDER / "network_output"
 OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
