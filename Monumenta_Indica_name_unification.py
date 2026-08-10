@@ -8,18 +8,21 @@ from tqdm import tqdm
 # 1. KONFIGURACJA
 # ============================================================
 
-INPUT_FOLDER = Path(r"C:\Users\Cezary\Documents\robert-maryks\data\Monumenta Indica")
+# Folder wejściowy jest liczony względem lokalizacji tego skryptu,
+# dzięki czemu kod działa niezależnie od nazwy konta Windows.
+SCRIPT_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+INPUT_FOLDER = SCRIPT_DIR / "data" / "Monumenta Indica"
 
 OUTPUT_FOLDER = INPUT_FOLDER / "name_unification_output"
-OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
-
 OUTPUT_XLSX = OUTPUT_FOLDER / "Monumenta_Indica_name_unification_template.xlsx"
 
 PAGE_MAX = 999
 
-EXPECTED_NAME_COL = "nazwa"
-EXPECTED_PAGES_COL = "numery stron"
-EXPECTED_CONTEXT_COL = "kontekst"
+# Pliki wygenerowane według finalnej specyfikacji mają nagłówki angielskie.
+# Zachowujemy również polskie aliasy dla zgodności ze starszymi plikami.
+NAME_COLUMN_ALIASES = ("Name", "nazwa")
+PAGES_COLUMN_ALIASES = ("Page numbers", "numery stron")
+CONTEXT_COLUMN_ALIASES = ("Context", "kontekst")
 
 
 # ============================================================
@@ -27,7 +30,19 @@ EXPECTED_CONTEXT_COL = "kontekst"
 # ============================================================
 
 def normalize_column_name(col):
-    return str(col).strip().lower()
+    """Normalizuje nagłówek kolumny do porównania technicznego."""
+    value = str(col).replace("\ufeff", " ").strip().casefold()
+    value = re.sub(r"\s+", " ", value)
+    return value
+
+
+def find_column(column_map, aliases):
+    """Zwraca rzeczywistą nazwę pierwszej kolumny pasującej do aliasów."""
+    for alias in aliases:
+        key = normalize_column_name(alias)
+        if key in column_map:
+            return column_map[key]
+    return None
 
 
 def clean_name(value):
@@ -98,7 +113,7 @@ def expand_page_range(start, end):
 
 def parse_pages(value, page_max=PAGE_MAX):
     """
-    Parsuje kolumnę 'numery stron'.
+    Parsuje kolumnę z numerami stron.
 
     Obsługuje m.in.:
     - 44, 231, 473
@@ -153,7 +168,7 @@ def parse_pages(value, page_max=PAGE_MAX):
 def get_volume_id(file_path):
     """
     Próbuje wydobyć numer tomu z nazwy pliku, np.:
-    monumenta_indica_index_18.xlsx -> 18
+    Monumenta_Indica_volume_02_index.xlsx -> 2
 
     Jeżeli nie znajdzie numeru, używa nazwy pliku bez rozszerzenia.
     """
@@ -168,9 +183,7 @@ def get_volume_id(file_path):
 
 
 def join_unique(values, sep=", ", limit=None):
-    """
-    Łączy unikalne wartości tekstowe.
-    """
+    """Łączy unikalne wartości tekstowe."""
     cleaned = []
 
     for v in values:
@@ -226,12 +239,26 @@ def choose_display_name(names):
 # 3. WCZYTANIE PLIKÓW
 # ============================================================
 
+print(f"Folder wejściowy: {INPUT_FOLDER}")
+
+if not INPUT_FOLDER.exists():
+    raise FileNotFoundError(
+        "Nie znaleziono folderu z plikami Monumenta Indica:\n"
+        f"  {INPUT_FOLDER}\n\n"
+        "Oczekiwana struktura lokalna to:\n"
+        "  <repozytorium>/data/Monumenta Indica/*.xlsx\n"
+        "Umieść pliki w tym folderze albo zmień INPUT_FOLDER w sekcji konfiguracji."
+    )
+
+OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
+
 excel_files = (
     list(INPUT_FOLDER.glob("*.xlsx")) +
     list(INPUT_FOLDER.glob("*.xls")) +
     list(INPUT_FOLDER.glob("*.xlsm"))
 )
 
+excel_files = sorted({p.resolve() for p in excel_files})
 excel_files = [
     p for p in excel_files
     if not p.name.startswith("~$")
@@ -240,6 +267,9 @@ excel_files = [
 ]
 
 print(f"Liczba znalezionych plików Excel: {len(excel_files)}")
+if excel_files:
+    for p in excel_files:
+        print(f"  - {p.name}")
 
 rows = []
 file_log = []
@@ -260,7 +290,15 @@ for file_path in tqdm(excel_files, desc="Wczytywanie indeksów"):
         })
         continue
 
-    for sheet_name in xls.sheet_names:
+    # Workbooks zgodne z finalną specyfikacją mają arkusze Index, Review, Report.
+    # Jeżeli Index istnieje, czytamy tylko jego, aby nie analizować tabel pomocniczych.
+    index_sheet = next(
+        (s for s in xls.sheet_names if normalize_column_name(s) == "index"),
+        None
+    )
+    sheets_to_read = [index_sheet] if index_sheet is not None else xls.sheet_names
+
+    for sheet_name in sheets_to_read:
         try:
             df = pd.read_excel(file_path, sheet_name=sheet_name)
         except Exception as e:
@@ -277,31 +315,37 @@ for file_path in tqdm(excel_files, desc="Wczytywanie indeksów"):
         normalized_cols = [normalize_column_name(c) for c in df.columns]
         column_map = dict(zip(normalized_cols, df.columns))
 
-        if EXPECTED_NAME_COL not in column_map:
+        name_col = find_column(column_map, NAME_COLUMN_ALIASES)
+        pages_col = find_column(column_map, PAGES_COLUMN_ALIASES)
+        context_col = find_column(column_map, CONTEXT_COLUMN_ALIASES)
+
+        if name_col is None:
             file_log.append({
                 "file": file_path.name,
                 "volume": volume_id,
                 "sheet": sheet_name,
                 "status": "SKIPPED_NO_NAME_COLUMN",
                 "rows_read": 0,
-                "message": "Brak kolumny 'nazwa'"
+                "message": (
+                    f"Brak kolumny Name/nazwa. Dostępne kolumny: "
+                    f"{', '.join(map(str, df.columns))}"
+                )
             })
             continue
 
-        if EXPECTED_PAGES_COL not in column_map:
+        if pages_col is None:
             file_log.append({
                 "file": file_path.name,
                 "volume": volume_id,
                 "sheet": sheet_name,
                 "status": "SKIPPED_NO_PAGES_COLUMN",
                 "rows_read": 0,
-                "message": "Brak kolumny 'numery stron'"
+                "message": (
+                    f"Brak kolumny Page numbers/numery stron. Dostępne kolumny: "
+                    f"{', '.join(map(str, df.columns))}"
+                )
             })
             continue
-
-        name_col = column_map[EXPECTED_NAME_COL]
-        pages_col = column_map[EXPECTED_PAGES_COL]
-        context_col = column_map.get(EXPECTED_CONTEXT_COL, None)
 
         local = df.copy()
         local["name_original"] = local[name_col].apply(clean_name)
@@ -345,7 +389,21 @@ names_df = pd.DataFrame(rows)
 file_log_df = pd.DataFrame(file_log)
 
 if names_df.empty:
-    raise ValueError("Nie wczytano żadnych danych. Sprawdź, czy arkusze zawierają kolumny 'nazwa' oraz 'numery stron'.")
+    diagnostics = ""
+    if file_log:
+        diagnostics = "\n\nDiagnostyka arkuszy:\n" + "\n".join(
+            f"  - {x['file']} | {x['sheet'] or '-'} | {x['status']} | {x['message']}"
+            for x in file_log
+        )
+
+    raise ValueError(
+        "Nie wczytano żadnych danych indeksowych.\n"
+        f"Folder: {INPUT_FOLDER}\n"
+        f"Liczba znalezionych plików Excel: {len(excel_files)}\n"
+        "Skrypt akceptuje kolumny: Name + Page numbers (+ opcjonalnie Context) "
+        "oraz starsze polskie odpowiedniki: nazwa + numery stron (+ kontekst)."
+        f"{diagnostics}"
+    )
 
 print(f"Liczba wczytanych rekordów indeksowych: {len(names_df)}")
 print(f"Liczba unikalnych form nazewniczych: {names_df['name_key'].nunique()}")
@@ -548,26 +606,3 @@ print(
         ]
     ].head(30)
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
