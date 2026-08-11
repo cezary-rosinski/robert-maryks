@@ -295,9 +295,11 @@
     if(id==="explore")fillNameList($("exploreScope").value);
     if(id==="compare")fillNameList($("comparisonMode").value==="custom"?"all":$("exploreScope").value);
     if(id==="triads")fillNameList($("triadMode").value==="custom"?"all":$("exploreScope").value);
-    if(id==="explore"&&!S.explore)runExplore();
-    if(id==="compare"&&!S.compare)runComparison();
-    if(id==="triads"&&!S.triad)runTriad();
+    requestAnimationFrame(()=>{
+      if(id==="explore")runExplore();
+      if(id==="compare")runComparison();
+      if(id==="triads")runTriad();
+    });
     window.scrollTo({top:0,behavior:"smooth"});
   }
   document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>setPanel(btn.dataset.panel)));
